@@ -17,6 +17,30 @@ write_files:
     content: | 
       ${ec2launchv2_config_b64}
 
+script: |
+  <powershell>
+  Start-Transcript -Path "C:\winrm.log" -Force
+  Write-Host "INIT"
+  Disable-NetFirewallRule -DisplayGroup 'Windows Remote Management'
+  New-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force | Out-Null
+  Set-NetConnectionProfile -InterfaceIndex (Get-NetConnectionProfile).InterfaceIndex -NetworkCategory Private
+  New-NetFirewallRule -Name 'WINRM-HTTPS-In-TCP' -DisplayName 'Windows Remote Management (HTTPS-In)' -Description "Inbound rule for Windows Remote Management via WS-Management. [TCP 5986]" -Group 'Windows Remote Management' -Program 'System' -Protocol TCP -LocalPort 5986 -Action 'Allow' -Enabled False | Out-Null
+  $cert = New-SelfSignedCertificate -CertstoreLocation Cert:\LocalMachine\My -DnsName ${win_dns_hostname}
+  New-Item -Path WSMan:\LocalHost\Listener -Transport HTTPS -Address * -CertificateThumbPrint $cert.Thumbprint -Hostname ${win_dns_hostname} -Port 5986 -Force | Out-Null
+  Set-Item -Path WSMan:\localhost\MaxTimeoutms -Value 180000 -Force
+  Set-Item -Path WSMan:\localhost\Client/TrustedHosts -Value * -Force
+  # required for NTLM auth
+  Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' -Name 'LmCompatibilityLevel' -Value 2 -Type DWord -Force
+  Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0' -Name 'NTLMMinServerSec' -Value 536870912 -Type DWord -Force
+  Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'LocalAccountTokenFilterPolicy' -Value 1 -Force
+  # keep service running
+  Set-Service -Name WinRM -StartupType Automatic
+  Restart-Service -Name WinRM
+  Enable-NetFirewallRule -DisplayName 'Windows Remote Management (HTTPS-In)'
+  Write-Host "DONE"
+  Stop-Transcript
+  </powershell>
+
 run-cmd:
   - echo "Hello World!"
   - ec2launch run

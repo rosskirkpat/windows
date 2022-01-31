@@ -1,5 +1,9 @@
-output "ad_bastion_hostname" {
+output "ad_bastion_public_hostname" {
     value = aws_instance.windows[0].public_dns
+}
+
+output "ad_bastion_private_hostname" {
+    value = aws_instance.windows[0].private_dns
 }
 
 output "ad_bastion_private_ip" {
