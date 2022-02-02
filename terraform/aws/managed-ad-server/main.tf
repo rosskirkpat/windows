@@ -184,7 +184,7 @@ resource "aws_security_group" "windows" {
       from_port   = 5985
       to_port     = 5986
       protocol    = "tcp"
-      cidr_blocks = [aws_vpc.cidr_block]
+      cidr_blocks = [aws_vpc.main.cidr_block]
       self        = true
       # ipv6_cidr_blocks = ["${chomp(data.http.myipv6.body)}"]
     }
@@ -207,7 +207,7 @@ resource "aws_instance" "windows" {
   vpc_security_group_ids      = [aws_vpc.main.default_security_group_id, aws_directory_service_directory.rancher_eng_ad.security_group_id, aws_security_group.windows.id]
   get_password_data           = "true"
   source_dest_check           = "false"
-  user_data            =  base64encode(templatefile("${path.root}/files/userdata-windows.yml", { ec2launchv2_config_b64 = filebase64("${path.root}/files/agent-config.yml"), windows_password = var.windows_admin_password, my_public_ip = "${chomp(data.http.myipv4.body)}/32", win_dns_hostname = aws_instance.windows[0].public_dns}))
+  user_data            =  base64encode(templatefile("${path.root}/files/userdata-windows.yml", { ec2launchv2_config_b64 = filebase64("${path.root}/files/agent-config.yml"), windows_password = var.windows_admin_password, my_public_ip = "${chomp(data.http.myipv4.body)}/32"}))
 # ad_domain = format("%s",aws_directory_service_directory.rancher_eng_ad.name), ad_dns_0 = format ("%s",aws_directory_service_directory.rancher_eng_ad.dns_ip_addresses[0]), ad_dns_1 = format ("%s",aws_directory_service_directory.rancher_eng_ad.dns_ip_addresses[1]),
   root_block_device {
     volume_size = 100
@@ -241,7 +241,7 @@ locals {
 
 # remote using NTLM authentication and HTTPS
 provider "ad" {
-  winrm_hostname = aws_instance.windows[0].public_dns
+  winrm_hostname = aws_instance.windows[0].public_ip
   winrm_username = local.bastion_username
   winrm_password = data.template_file.decrypted_keys[0].rendered
   winrm_use_ntlm = true
@@ -253,8 +253,7 @@ provider "ad" {
 
 module "populate" {
   depends_on = [
-    aws_directory_service_directory.rancher_eng_ad,
-    aws_instance.windows
+    aws_directory_service_directory.rancher_eng_ad
   ]
   # providers = {
   #   ad = ad

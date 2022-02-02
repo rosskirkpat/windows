@@ -25,8 +25,13 @@ script: |
   New-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" -Force | Out-Null
   Set-NetConnectionProfile -InterfaceIndex (Get-NetConnectionProfile).InterfaceIndex -NetworkCategory Private
   New-NetFirewallRule -Name 'WINRM-HTTPS-In-TCP' -DisplayName 'Windows Remote Management (HTTPS-In)' -Description "Inbound rule for Windows Remote Management via WS-Management. [TCP 5986]" -Group 'Windows Remote Management' -Program 'System' -Protocol TCP -LocalPort 5986 -Action 'Allow' -Enabled False | Out-Null
-  $cert = New-SelfSignedCertificate -CertstoreLocation Cert:\LocalMachine\My -DnsName ${win_dns_hostname}
-  New-Item -Path WSMan:\LocalHost\Listener -Transport HTTPS -Address * -CertificateThumbPrint $cert.Thumbprint -Hostname ${win_dns_hostname} -Port 5986 -Force | Out-Null
+  $TOKEN = $(curl.exe -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+  # $localHostname = $(curl.exe -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/local-hostname)
+  # $publicHostname = $(curl.exe -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/public-hostname)
+  $publicIpv4 = $(curl.exe -H 'X-aws-ec2-metadata-token: $TOKEN' -v http://169.254.169.254/latest/meta-data/public-ipv4)
+  $privateDNS = [System.Net.Dns]::GetHostName()
+  $cert = New-SelfSignedCertificate -CertstoreLocation Cert:\LocalMachine\My -DnsName $publicIpv4
+  New-Item -Path WSMan:\LocalHost\Listener -Transport HTTPS -Address * -CertificateThumbPrint $cert.Thumbprint -Hostname $publicIpv4 -Port 5986 -Force | Out-Null
   Set-Item -Path WSMan:\localhost\MaxTimeoutms -Value 180000 -Force
   Set-Item -Path WSMan:\localhost\Client/TrustedHosts -Value * -Force
   # required for NTLM auth
